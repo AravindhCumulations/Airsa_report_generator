@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI in Action</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-container">
+                <img src="https://airsa.s3.us-east-1.amazonaws.com/gyan_logo.png" alt="AI IN ACTION" class="logo">
+            </div>
+            <p>Industry and Company Explorer</p>
+        </header>
+
+        <div class="card">
+            <h2>Step 1: Fetch Industries</h2>
+            <p>Click the button below to fetch available industries</p>
+            <button id="fetchIndustryBtn" class="btn primary">
+                <span>Fetch Industries</span>
+                <div id="industryLoading" class="loader hidden"></div>
+            </button>
+            
+            <div id="industrySelectContainer" class="select-container hidden">
+                <h3>Select an Industry</h3>
+                <div class="select-with-button">
+                    <select id="industrySelect">
+                        <option value="">-- Select Industry --</option>
+                    </select>
+                    <button id="fetchCompaniesBtn" class="btn primary">
+                        <span>Fetch Companies</span>
+                        <div id="companyLoading" class="loader hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="companyContainer" class="card hidden">
+            <h2>Step 2: Select Companies for Analysis</h2>
+            <p>Choose companies to generate AIRSA reports</p>
+            <div id="companyList" class="company-grid"></div>
+            <button id="generateReportBtn" class="btn secondary hidden">
+                <span>Generate AIRSA Report</span>
+                <div id="reportLoading" class="loader hidden"></div>
+            </button>
+            <div id="selectedCount" class="selected-count hidden"></div>
+        </div>
+
+        <div id="reportContainer" class="card hidden">
+            <h2>AIRSA Reports</h2>
+            <div id="reportContent"></div>
+        </div>
+
+        <div id="noCompanyMessage" class="card message-card hidden">
+            <p>Please select an industry and click "Fetch Companies" to view companies</p>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2025 AI in Action</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
