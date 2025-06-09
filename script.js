@@ -117,12 +117,24 @@ fetchIndustryBtn.addEventListener("click", async () => {
 
     industrySelectContainer.classList.remove("hidden")
   } catch (err) {
-    alert("Failed to fetch industries: " + err.message)
+    showToast("Failed to fetch industries: " + err.message, "error")
   } finally {
     industryLoading.classList.add("hidden")
     fetchIndustryBtn.disabled = false
   }
 })
+
+function showToast(message, type = "error") {
+  const toast = document.createElement("div")
+  toast.className = `toast toast-${type}`
+  toast.textContent = message
+
+  document.getElementById("toastContainer").appendChild(toast)
+
+  setTimeout(() => {
+    toast.remove()
+  }, 3000)
+}
 
 // Fetch companies from Sheet1 based on selected industry
 fetchCompaniesBtn.addEventListener("click", async () => {
@@ -131,7 +143,7 @@ fetchCompaniesBtn.addEventListener("click", async () => {
   currentCompanies = []
   selectedCompanies.clear()
 
-  if (!industryId || !industryName) return alert("Select industry first")
+  if (!industryId || !industryName) return showToast("Select industry first", "error")
 
   try {
     companyLoading.classList.remove("hidden")
@@ -151,7 +163,8 @@ fetchCompaniesBtn.addEventListener("click", async () => {
     // Hide report section
     reportContainer.classList.add("hidden")
   } catch (err) {
-    alert("Failed to fetch company data: " + err.message)
+    showToast("Failed to fetch company data: " + err.message, "error")
+    
   } finally {
     companyLoading.classList.add("hidden")
     fetchCompaniesBtn.disabled = false
@@ -230,7 +243,7 @@ generateReportBtn.addEventListener("click", async () => {
         output_type: "chat",
         input_type: "chat",
         tweaks: {
-          "ChatInput-HDGra": { input_value: payload },
+          "ChatInput-ysKIY": { input_value: payload },
         },
       }
 
@@ -244,29 +257,75 @@ generateReportBtn.addEventListener("click", async () => {
       const message = data?.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message
       const reportData = JSON.parse(message)
 
-      // Generate PDF
-      const reqBodyPdf = {
-        output_type: "chat",
-        input_type: "chat",
-        tweaks: {
-          "ChatInput-ZPAgf": { input_value: payload },
-        },
+      // Generate PDF with proper error handling
+      let pdfLink = null
+      let pdfError = null
+
+      try {
+        const reqBodyPdf = {
+          output_type: "chat",
+          input_type: "chat",
+          tweaks: {
+            "ChatInput-ZPAgf": { input_value: payload },
+          },
+        }
+
+        const responsePdf = await fetch(GENERATE_PDF_REPORT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBodyPdf),
+        })
+
+        if (!responsePdf.ok) {
+          throw new Error(`PDF API returned ${responsePdf.status}: ${responsePdf.statusText}`)
+        }
+
+        const dataPdf = await responsePdf.json()
+
+        // Check if response has expected structure
+        if (!dataPdf?.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message) {
+          throw new Error("Invalid PDF API response structure")
+        }
+
+        const pdfMessage = dataPdf.outputs[0].outputs[0].messages[0].message
+
+        // Check if message contains error indicators
+        if (
+          pdfMessage.toLowerCase().includes("error") ||
+          pdfMessage.toLowerCase().includes("failed") ||
+          pdfMessage.toLowerCase().includes("exception")
+        ) {
+          throw new Error(`PDF generation failed: ${pdfMessage}`)
+        }
+
+        // Extract PDF URL
+        const urlMatch = pdfMessage.match(/https?:\/\/[^\s"]+/)
+        if (!urlMatch) {
+          throw new Error("No valid PDF URL found in response")
+        }
+
+        pdfLink = urlMatch[0]
+        
+      } catch (error) {
+        pdfError = error.message
+        showToast(`PDF generation failed for ${company.company_name}: ${error.message}`)
+
+        // // Show user notification (you can customize this)
+        // if (
+        //   window.confirm(`PDF generation failed for ${company.company_name}: ${error.message}\n\nContinue without PDF?`)
+        // ) {
+        //   // Continue with report generation
+        // } else {
+        //   // Skip this company or abort
+        //   continue // Skip to next company
+        // }
       }
-
-      const responsePdf = await fetch(GENERATE_PDF_REPORT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBodyPdf),
-      })
-
-      const dataPdf = await responsePdf.json()
-      const pdfMessage = dataPdf?.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message
-      const pdfLink = (pdfMessage || "").match(/https?:\/\/[^\s"]+/)?.[0] || null
 
       reports.push({
         companyName: company.company_name,
         reportData,
         pdfLink,
+        pdfError, // Include error info
         emails: reportData.emails || [],
       })
     }
@@ -274,8 +333,7 @@ generateReportBtn.addEventListener("click", async () => {
     companyReportCache = reports
     renderCompanyTabs(reports)
   } catch (err) {
-    alert("Failed to generate reports: " + err.message)
-    console.error("Report generation error:", err)
+    showToast("Failed to generate reports: " + err.message)
   } finally {
     reportLoading.classList.add("hidden")
     generateReportBtn.disabled = false
@@ -305,12 +363,21 @@ function renderCompanyTabs(reports) {
             
             ${
               r.pdfLink
-                ? `
-              <a href="${r.pdfLink}" target="_blank" class="pdf-link">
-                <i class="fas fa-file-pdf"></i> View PDF Report
-              </a>
-            `
-                : ""
+                ? `<a href="${r.pdfLink}" target="_blank" class="pdf-link">
+         <i class="fas fa-file-pdf"></i> View PDF Report
+       </a>`
+                : r.pdfError
+                  ? `<div class="pdf-error">
+         <i class="fas fa-exclamation-triangle"></i> 
+         PDF Generation Failed: ${r.pdfError}
+         <button onclick="retryPdfGeneration(${i})" class="btn btn-small primary" style="margin-left: 10px;">
+           Retry PDF
+         </button>
+       </div>`
+                  : `<div class="pdf-warning">
+         <i class="fas fa-info-circle"></i> 
+         No PDF available for this report
+       </div>`
             }
             
             <div class="email-section">
@@ -476,8 +543,8 @@ async function sendEmailForCompany(index) {
       emails: selectedEmails,
       message: prompt,
       companyName: report.companyName,
-      attachPdf: true,
-      pdfLink: report.pdfLink,
+      attachPdf: report.pdfLink ? true : false, // Only attach if PDF exists
+      pdfLink: report.pdfLink || null,
     })
 
     const reqBody = {
@@ -510,6 +577,76 @@ async function sendEmailForCompany(index) {
   }
 }
 
+async function retryPdfGeneration(companyIndex) {
+  const report = companyReportCache[companyIndex]
+  const payload = JSON.stringify({ value: currentCompanies.find(c => c.company_name === report.companyName) })
+
+  const tabContent = document.querySelector(`.tab-content[data-tab="${companyIndex}"]`)
+  const retryButton = tabContent.querySelector("button")
+  retryButton.disabled = true
+  retryButton.textContent = "Retrying..."
+
+  try {
+    const reqBodyPdf = {
+      output_type: "chat",
+      input_type: "chat",
+      tweaks: {
+        "ChatInput-ZPAgf": { input_value: payload },
+      },
+    }
+
+    const responsePdf = await fetch(GENERATE_PDF_REPORT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reqBodyPdf),
+    })
+
+    if (!responsePdf.ok) throw new Error(`HTTP ${responsePdf.status}`)
+
+    const dataPdf = await responsePdf.json()
+    const pdfMessage = dataPdf.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message || ""
+
+    if (
+      pdfMessage.toLowerCase().includes("error") ||
+      pdfMessage.toLowerCase().includes("failed") ||
+      pdfMessage.toLowerCase().includes("exception")
+    ) {
+      throw new Error(`PDF generation failed: ${pdfMessage}`)
+    }
+
+    const urlMatch = pdfMessage.match(/https?:\/\/[^\s"]+/)
+    if (!urlMatch) throw new Error("No valid PDF URL found")
+
+    const pdfLink = urlMatch[0]
+    report.pdfLink = pdfLink
+    report.pdfError = null
+
+    // Replace existing PDF section with new link
+    const pdfSection = tabContent.querySelector(".pdf-error") || tabContent.querySelector(".pdf-warning")
+    pdfSection.outerHTML = `
+      <a href="${pdfLink}" target="_blank" class="pdf-link">
+        <i class="fas fa-file-pdf"></i> View PDF Report
+      </a>
+    `
+  } catch (error) {
+    report.pdfError = error.message
+    const pdfSection = tabContent.querySelector(".pdf-error") || tabContent.querySelector(".pdf-warning")
+    pdfSection.innerHTML = `
+      <div class="pdf-error">
+        <i class="fas fa-exclamation-triangle"></i>
+        PDF Retry Failed: ${error.message}
+        <button onclick="retryPdfGeneration(${companyIndex})" class="btn btn-small primary" style="margin-left: 10px;">
+          Retry PDF
+        </button>
+      </div>
+    `
+  } finally {
+    retryButton.disabled = false
+    retryButton.textContent = "Retry PDF"
+  }
+}
+
 // Make functions globally available
 window.addNewEmail = addNewEmail
 window.sendEmailForCompany = sendEmailForCompany
+window.retryPdfGeneration = retryPdfGeneration
