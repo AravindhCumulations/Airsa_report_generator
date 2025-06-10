@@ -243,7 +243,7 @@ generateReportBtn.addEventListener("click", async () => {
         output_type: "chat",
         input_type: "chat",
         tweaks: {
-          "ChatInput-ysKIY": { input_value: payload },
+          "ChatInput-HDGra": { input_value: payload },
         },
       }
 
